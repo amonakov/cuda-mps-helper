@@ -1,7 +1,7 @@
 #!/bin/bash
 
-MPSBASE="/tmp/nvidia-mps-$USER"
-MPSCONTROL=nvidia-cuda-mps-control
+: ${MPSBASE:="/tmp/nvidia-mps-$USER"}
+: ${MPSCONTROL:=nvidia-cuda-mps-control}
 
 start()
 {
