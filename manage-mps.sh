@@ -5,7 +5,7 @@
 
 start()
 {
-  if pidof -s "$MPSCONTROL" >/dev/null; then
+  if pgrep -u "$UID" -fx "$MPSCONTROL -d" >/dev/null; then
     echo "CUDA MPS already running"
     exit 1
   fi
@@ -34,7 +34,7 @@ start()
 
 findmps()
 {
-  local MPS=$(pidof -s "$MPSCONTROL")
+  local MPS=$(pgrep -u "$UID" -fx "$MPSCONTROL -d")
   if [ -z "$MPS" ]; then
     echo "No MPS running"
     exit 1
