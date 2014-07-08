@@ -3,10 +3,25 @@
 : ${MPSBASE:="/tmp/nvidia-mps-$USER"}
 : ${MPSCONTROL:=nvidia-cuda-mps-control}
 
+lookup()
+{
+  local MPS=$(pgrep -u "$UID" -fx "$MPSCONTROL -d")
+  if [ -z "$MPS" ]; then
+    return 1
+  fi
+  local MPSPIPEDIR=$(tr '\0' '\n' </proc/$MPS/environ |
+    sed -n 's/^CUDA_MPS_PIPE_DIRECTORY=\(.*\)/\1/p')
+  if [ -n "$MPSPIPEDIR" ]; then
+    dirname "$MPSPIPEDIR"
+  else
+    echo /tmp/nvidia-mps
+  fi
+}
+
 start_()
 {
-  if pgrep -u "$UID" -fx "$MPSCONTROL -d" >/dev/null; then
-    exit
+  if lookup >/dev/null; then
+    return
   fi
 
   CUDA_DEVICES=$@
@@ -14,6 +29,10 @@ start_()
   if [ -z "$CUDA_DEVICES" ]; then
     N_TESLA_DEVICES=$(nvidia-smi -L | grep Tesla | wc -l)
     CUDA_DEVICES="$(seq 0 $[$N_TESLA_DEVICES - 1])"
+  fi
+
+  if [ -z "$CUDA_DEVICES" ]; then
+    return 1
   fi
 
   MPSDIRS="$(mktemp -d "$MPSBASE-XXXXXX")"
@@ -35,30 +54,15 @@ start_()
 
 start()
 {
-  MPSDIRS="$(flock -o /tmp -c "$0 start_ $@")"
+  MPSDIRS="$(flock -o /tmp -c "$0 start_ $@")" || return $?
   if [ -n "$MPSDIRS" ]; then
     echo MPSDIRS="$MPSDIRS"
   fi
 }
 
-lookup()
-{
-  local MPS=$(pgrep -u "$UID" -fx "$MPSCONTROL -d")
-  if [ -z "$MPS" ]; then
-    return
-  fi
-  local MPSPIPEDIR=$(tr '\0' '\n' </proc/$MPS/environ |
-    sed -n 's/^CUDA_MPS_PIPE_DIRECTORY=\(.*\)/\1/p')
-  if [ -n "$MPSPIPEDIR" ]; then
-    dirname "$MPSPIPEDIR"
-  else
-    echo /tmp/nvidia-mps
-  fi
-}
-
 stop_()
 {
-  MPSDIRS="$(lookup)"
+  MPSDIRS="$(lookup)" || return $?
   for i in "$MPSDIRS"/*; do
     CUDA_MPS_PIPE_DIRECTORY="$i" "$MPSCONTROL" <<<quit
   done
@@ -72,7 +76,7 @@ stop()
 
 wrap_()
 {
-  local MPSDIRS="$(lookup)"
+  local MPSDIRS="$(lookup)" || return $?
   N=$(ls "$MPSDIRS/" | wc -l)
   I=${MV2_COMM_WORLD_LOCAL_RANK-${OMPI_COMM_WORLD_LOCAL_RANK-0}}
   CUDA_MPS_PIPE_DIRECTORY="$MPSDIRS/$[$I % $N]" "$@"
@@ -91,7 +95,7 @@ command="$1"
 shift
 
 case "$command" in
-  start | start_ | stop | stop_ | wrap | wrap_)
+  lookup | start | start_ | stop | stop_ | wrap | wrap_)
     "$command" "$@"
     ;;
   *)
