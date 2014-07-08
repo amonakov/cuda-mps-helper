@@ -46,7 +46,7 @@ start_()
     CUDA_VISIBLE_DEVICES=$i \
       CUDA_MPS_PIPE_DIRECTORY="$D" \
       CUDA_MPS_LOG_DIRECTORY="$D" \
-      "$MPSCONTROL" -d
+      "$MPSCONTROL" -d >/dev/null
   done
 
   echo "$MPSDIRS"
